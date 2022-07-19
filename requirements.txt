@@ -1,0 +1,11 @@
+uvicorn
+fastapi
+starlette
+loguru
+pydantic
+pandas
+networkx
+numpy
+python-multipart
+pydantic
+
