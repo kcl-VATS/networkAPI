@@ -44,4 +44,3 @@ async def upload(file:UploadFile=File(...)):
             content = await file.read()  # async read
             await out_file.write(content)  # async write
         return 'File added succesfully'
-
