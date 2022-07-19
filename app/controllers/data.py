@@ -34,7 +34,7 @@ async def check():
 async def upload(file:UploadFile=File(...)):
     """
     uploads file to the local server
-    :return: 'success' if uploaded
+    :return: success if uploaded , fail if file already exists
     """      
     if file.filename in  [os.path.basename(x) 
                        for x in glob.glob(DATA_PATH+"/*.txt")]:
@@ -45,14 +45,3 @@ async def upload(file:UploadFile=File(...)):
             await out_file.write(content)  # async write
         return 'File added succesfully'
 
-@data.get('/read/')
-async def read():
-    try:
-        logger.info(DATA_PATH)
-        data = pd.read_csv(Path(DATA_PATH)/'ld_clump_assoc.txt',delimiter = "\t")
-        logger.info('data is loaded succesfully')
-        return glob.glob(DATA_PATH+"/*.txt")
-
-    except:
-        logger.warning('data error, check file')
-        return 'Fail'
