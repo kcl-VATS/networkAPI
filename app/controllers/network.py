@@ -1,13 +1,13 @@
+from operator import ge
 from fastapi import APIRouter
 from loguru import logger
 from app.core.settings import DATA_PATH
+from app.controllers.helpers import get_files_list
 from pathlib import Path 
 import networkx as nx
 import pandas as pd
 from typing import Tuple
-import os 
-import glob 
-
+ 
 network = APIRouter()
 
 cpgNet = nx.DiGraph()
@@ -16,8 +16,7 @@ cpgNet = nx.DiGraph()
 async def load(filename:str):
     if len(cpgNet)>0:
         return 'Network already loaded'
-    if not filename in  [os.path.basename(x) 
-                       for x in glob.glob(DATA_PATH+"/*.txt")]:
+    if not filename in  get_files_list(DATA_PATH):
         return 'No such file in the system'
                     
     data = pd.read_csv(Path(DATA_PATH)/filename,delimiter = "\t")
