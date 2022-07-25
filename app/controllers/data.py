@@ -5,7 +5,6 @@ from pydantic import BaseModel
 import aiofiles
 from app.controllers.helpers import get_files_list
 
-
 data = APIRouter()
 
 
@@ -44,4 +43,4 @@ async def upload(file:UploadFile=File(...)):
 
 @data.get('/remove/')
 async def remove(filename:str):
-    return 0 
+    return 

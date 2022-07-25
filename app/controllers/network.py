@@ -1,19 +1,20 @@
-from operator import ge
 from fastapi import APIRouter
-from loguru import logger
 from app.core.settings import DATA_PATH
 from app.controllers.helpers import get_files_list
 from pathlib import Path 
 import networkx as nx
 import pandas as pd
 from typing import Tuple
- 
+from pydantic import BaseModel
+
+
 network = APIRouter()
 
 cpgNet = nx.DiGraph()
 
 @network.get('/load')
-async def load(filename:str):
+async def load(file:str):
+    filename = file
     if len(cpgNet)>0:
         return 'Network already loaded'
     if not filename in  get_files_list(DATA_PATH):
@@ -28,7 +29,6 @@ async def load(filename:str):
     cpgNet.add_nodes_from(lds)
     cpgNet.add_edges_from(cpg_ld_edges)
     return 'Network loaded'
-
 
 @network.get('/empty_network')
 async def empty():
