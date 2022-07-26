@@ -12,7 +12,6 @@ class filesOut(BaseModel):
     fileList: list[str]
 
 
-
 @data.get('/check/',response_model=filesOut)
 async def check():
     """

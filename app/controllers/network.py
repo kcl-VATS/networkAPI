@@ -55,7 +55,14 @@ async def subgraph(cpg:str):
 
     subGraph:nx.classes.digraph.DiGraph =  cpgNet.subgraph(reachable_nodes)
 
-    return nx.to_dict_of_dicts(subGraph)
+    graphologyNodes:list =[{'key':node} for node in list(subGraph.nodes())]
+    graphologyEdges:list =[{'source':edge[0],'target':edge[1]} for edge in list(subGraph.edges())]
+    graphologyAttribute:dict = {'name': f'Network for {cpg}'} 
+    graphologyObject:dict = {'attributes': graphologyAttribute,
+    'nodes':graphologyNodes,
+    'edges':graphologyEdges}
+
+    return graphologyObject
 
 
 @network.get('/connectivity')
