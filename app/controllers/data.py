@@ -39,7 +39,3 @@ async def upload(file:UploadFile=File(...)):
             content = await file.read()  # async read
             await out_file.write(content)  # async write
         return 'File added succesfully'
-
-@data.get('/remove/')
-async def remove(filename:str):
-    return 
