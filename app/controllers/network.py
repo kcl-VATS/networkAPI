@@ -42,32 +42,34 @@ EWAS_API_URL = 'http://ewascatalog.org/api/?cpg='
 
 @network.get('/process')
 # fix filters
-def get_data(file:str,minDistance:int,minAssoc:int,minChrom:int):
+def get_data(file:str,minDistance:int,minAssoc:int,chromosomeList:str,minPval:int):
     
     data = pd.read_csv(Path(DATA_PATH)/file,index_col=0) 
+    chr_lst = chromosomeList.split('-')
+    data['cpg_chr'] = data['cpg_chr'].apply(str)
+    data['snp_chr'] = data['snp_chr'].apply(str)
     
+    data = data[data['cistrans']==False]
+    
+    data = data.groupby('cpg') # group data by cpgs
+    data = data.filter(lambda x: len(x) >= minAssoc) # filter by number of associations per cpg
+    
+    data = data[data['cpg_chr'].isin(chr_lst)]
+    data = data[data['pval']<1*10**-minPval]
+    
+
     data['cpg_pos_abs'] = data['cpg_chr'].apply(lambda cpg_chr: chromosome_distance[str(cpg_chr)]) + data['cpg_pos'] # calculate absolute distance of cpg
     data['snp_pos_abs'] = data['snp_chr'].apply(lambda snp_chr: chromosome_distance[str(snp_chr)]) + data['snp_pos'] # calculate absolute distance of snp
     data['dist'] = abs(data['cpg_pos_abs'] - data['snp_pos_abs']) # calculate distance between pairs
+    data = data[data['dist']>=minDistance] # filter by min distance
 
-    df_g = data.groupby('cpg') # group data by cpgs
-    df_g = df_g.filter(lambda x: len(x) >= minAssoc) # filter by number of associations per cpg
-    df_g = df_g[df_g['dist']>=minDistance] # filter by min distance
-    df_g = df_g.reset_index(drop=True)
-    
-    # filtering by minimum number of unique choromosomes
-    #num_chrom_unique = df_g.groupby('cpg')['snp_chr'].nunique()
-    #df_g = pd.merge(df_g,num_chrom_unique,on=['cpg','snp'])
-   
-    df_g = df_g[df_g['cpg_chr'] >= minChrom]
-    df_g.reset_index()
-    #df_g['inter'] = (df_g['cpg_chr'] == df_g['snp_chr'])
-    #df_g = df_g[df_g['inter']== False]
-    #df_g = df_g.reset_index(drop=True)
-    df_g['id'] = df_g.index 
+    data = data.reset_index(drop=True)
         
-    return df_g.to_dict('records')
+    data['id'] = data.index 
 
+    response = data.to_dict('records')  
+ 
+    return response
 
 @network.get('/ewas')
 def ewas(cpg:str,file:str,targetCpg:str):
@@ -102,7 +104,3 @@ def ewas(cpg:str,file:str,targetCpg:str):
         
         return {'subgraph':assoc_df.to_dict('records'),'ewas':'error','godmc':'error'}
         
-    
-
-
-

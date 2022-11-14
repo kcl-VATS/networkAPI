@@ -10,7 +10,7 @@ import uvicorn
 app = FastAPI()
 
 # add middleware
-app.add_middleware(GZipMiddleware, minimum_size=1000)
+app.add_middleware(GZipMiddleware, minimum_size=500)
 
 app.add_middleware(
     CORSMiddleware,
