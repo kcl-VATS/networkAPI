@@ -45,18 +45,18 @@ EWAS_API_URL = 'http://ewascatalog.org/api/?cpg='
 def get_data(file:str,minDistance:int,minAssoc:int,chromosomeList:str,minPval:int):
     
     data = pd.read_csv(Path(DATA_PATH)/file,index_col=0) 
+    annot = pd.read_csv(Path(DATA_PATH)/'annot'/'cpg_annotation.csv',index_col=0)
     chr_lst = chromosomeList.split('-')
     data['cpg_chr'] = data['cpg_chr'].apply(str)
     data['snp_chr'] = data['snp_chr'].apply(str)
-    
+
     data = data[data['cistrans']==False]
-    
+
     data = data.groupby('cpg') # group data by cpgs
     data = data.filter(lambda x: len(x) >= minAssoc) # filter by number of associations per cpg
-    
+
     data = data[data['cpg_chr'].isin(chr_lst)]
-    data = data[data['pval']<1*10**-minPval]
-    
+    data = data[data['pval']<=1*10**-minPval]
 
     data['cpg_pos_abs'] = data['cpg_chr'].apply(lambda cpg_chr: chromosome_distance[str(cpg_chr)]) + data['cpg_pos'] # calculate absolute distance of cpg
     data['snp_pos_abs'] = data['snp_chr'].apply(lambda snp_chr: chromosome_distance[str(snp_chr)]) + data['snp_pos'] # calculate absolute distance of snp
@@ -64,24 +64,54 @@ def get_data(file:str,minDistance:int,minAssoc:int,chromosomeList:str,minPval:in
     data = data[data['dist']>=minDistance] # filter by min distance
 
     data = data.reset_index(drop=True)
-        
+
+    data = data.merge(annot,how='left',on='cpg')
+
+    data.drop(['MAPINFO','CHR'],axis=1,inplace=True)
+    
+    data['UCSC_RefGene_Name'] = data['UCSC_RefGene_Name'].fillna('no annotation')
+    
     data['id'] = data.index 
 
-    response = data.to_dict('records')  
+    response = data.to_dict('records')
  
     return response
 
 @network.get('/ewas')
-def ewas(cpg:str,file:str,targetCpg:str):
-     
+def ewas(cpg:str,file:str,level:int):
+    
     data = pd.read_csv(Path(DATA_PATH)/file,index_col=0)
-    cpg_cons = data[data['cpg'] == targetCpg]
-    snps = cpg_cons['snp'].values
-    snp_cons = data[data['snp'].isin(snps)]
-    assoc_df = pd.concat([snp_cons,cpg_cons],ignore_index=True)
-    assoc_df.drop_duplicates(inplace=True)
-    assoc_df = assoc_df.reset_index(drop=True)
-    assoc_df['id'] = assoc_df.index 
+   
+    cpg_interest = [cpg]
+    cpgs = []
+    snps = []
+
+    for cpg in cpg_interest:
+        
+        start = 1
+        cpgs.append({'id':cpg,
+                'level':0})
+
+        while start <= level:
+            
+            cpg_included = [cpg['id'] for cpg in cpgs if cpg['level'] < start]
+            snps_to_include = data[data['cpg'].isin(cpg_included)]['snp'].values
+            [snps.append({'id':snp,'level':start}) for snp in snps_to_include 
+                         if snp not in [snp['id'] for snp in snps]]
+            snps_included = [snp['id'] for snp in snps if snp['level'] == start]
+            cpgs_to_include = data[data['snp'].isin(snps_included)]['cpg'].values
+            [cpgs.append({'id':cpg,'level':start}) for cpg in cpgs_to_include 
+                         if cpg not in [cpg['id'] for cpg in cpgs]] 
+            
+            start+= 1
+
+    networkDf = data[data['cpg'].isin([cpg['id'] for cpg in cpgs])]
+    networkDf = networkDf[networkDf['snp'].isin([snp['id'] for snp in snps])]
+    networkDf = networkDf.reset_index(drop=True)   
+    networkDf['id'] = networkDf.index 
+    edges_data = networkDf.to_dict('records')
+    nodes = cpgs + snps
+    networkObj = {'nodeAttributes':{'snp':snps,'cpg':cpgs},'edgeAttributes':edges_data}    
     
     try:
         
@@ -89,18 +119,17 @@ def ewas(cpg:str,file:str,targetCpg:str):
         ewasData = ewasResponse.json()
         
         try :
-            uniqueCpgList = assoc_df['cpg'].unique().tolist()
-            godmcQueryJson = {"cpgs":uniqueCpgList,"cistrans": "trans"}
+            uniqueCpgList = networkDf['cpg'].unique().tolist()
+            godmcQueryJson = {"cpgs":uniqueCpgList,"cistrans": "trans","pval": 1e-10}
             godmcResponse = requests.post(GODMC_API_URL,json=godmcQueryJson)
-        
             godmcData = godmcResponse.json()
             
-            return {'subgraph':assoc_df.to_dict('records'),'ewas':ewasData,'godmc':godmcData}
+            return {'subgraph':networkObj,'ewas':ewasData,'godmc':godmcData}
         
         except:
-            return {'subgraph':assoc_df.to_dict('records'),'ewas':ewasData,'godmc':'error'}
+            return {'subgraph':networkObj,'ewas':ewasData,'godmc':'error'}
     
     except:
         
-        return {'subgraph':assoc_df.to_dict('records'),'ewas':'error','godmc':'error'}
+        return {'subgraph':networkObj,'ewas':'error','godmc':'error'}
         
