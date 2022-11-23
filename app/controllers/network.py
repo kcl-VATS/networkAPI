@@ -69,7 +69,7 @@ def get_data(file:str,minDistance:int,minAssoc:int,chromosomeList:str,minPval:in
 
     data.drop(['MAPINFO','CHR'],axis=1,inplace=True)
     
-    data['UCSC_RefGene_Name'] = data['UCSC_RefGene_Name'].fillna('no annotation')
+    data['UCSC_RefGene_Name'] = data['UCSC_RefGene_Name'].fillna('-')
     
     data['id'] = data.index 
 
@@ -81,55 +81,49 @@ def get_data(file:str,minDistance:int,minAssoc:int,chromosomeList:str,minPval:in
 def ewas(cpg:str,file:str,level:int):
     
     data = pd.read_csv(Path(DATA_PATH)/file,index_col=0)
-   
-    cpg_interest = [cpg]
+    ewas_res = pd.read_csv(Path(DATA_PATH)/'annot'/'ewas_results.csv',dtype={'Chr':str},index_col=0)
+    ewas_stud = pd.read_csv(Path(DATA_PATH)/'annot'/'ewas_stud.csv',index_col = 0)
+    
+    cpg_interest = cpg.split('-')
     cpgs = []
     snps = []
-
+    level = 1    
     for cpg in cpg_interest:
-        
-        start = 1
-        cpgs.append({'id':cpg,
-                'level':0})
+            
+            start = 1
+            cpgs.append({'id':cpg,
+                    'level':0})
 
-        while start <= level:
-            
-            cpg_included = [cpg['id'] for cpg in cpgs if cpg['level'] < start]
-            snps_to_include = data[data['cpg'].isin(cpg_included)]['snp'].values
-            [snps.append({'id':snp,'level':start}) for snp in snps_to_include 
-                         if snp not in [snp['id'] for snp in snps]]
-            snps_included = [snp['id'] for snp in snps if snp['level'] == start]
-            cpgs_to_include = data[data['snp'].isin(snps_included)]['cpg'].values
-            [cpgs.append({'id':cpg,'level':start}) for cpg in cpgs_to_include 
-                         if cpg not in [cpg['id'] for cpg in cpgs]] 
-            
-            start+= 1
+            while start <= level:
+                
+                cpg_included = [cpg['id'] for cpg in cpgs if cpg['level'] < start]
+                snps_to_include = data[data['cpg'].isin(cpg_included)]['snp'].values
+                [snps.append({'id':snp,'level':start}) for snp in snps_to_include 
+                            if snp not in [snp['id'] for snp in snps]]
+                snps_included = [snp['id'] for snp in snps if snp['level'] == start]
+                cpgs_to_include = data[data['snp'].isin(snps_included)]['cpg'].values
+                [cpgs.append({'id':cpg,'level':start}) for cpg in cpgs_to_include 
+                            if cpg not in [cpg['id'] for cpg in cpgs]] 
+                
+                start+= 1
 
-    networkDf = data[data['cpg'].isin([cpg['id'] for cpg in cpgs])]
-    networkDf = networkDf[networkDf['snp'].isin([snp['id'] for snp in snps])]
-    networkDf = networkDf.reset_index(drop=True)   
-    networkDf['id'] = networkDf.index 
-    edges_data = networkDf.to_dict('records')
-    nodes = cpgs + snps
-    networkObj = {'nodeAttributes':{'snp':snps,'cpg':cpgs},'edgeAttributes':edges_data}    
+    network_df = data[data['cpg'].isin([cpg['id'] for cpg in cpgs])]
+    network_df = network_df[network_df['snp'].isin([snp['id'] for snp in snps])]
+    network_df = network_df.reset_index(drop=True)   
+    network_df['id'] = network_df.index 
+    edges_data = network_df.to_dict('records')
+    network_obj = {'nodeAttributes':{'snp':snps,'cpg':cpgs},'edgeAttributes':edges_data}
+    ewas_res = ewas_res[ewas_res['CpG'].isin(network_df['cpg'].unique())]
+    ewas_res = ewas_res.merge(ewas_stud,on=["StudyID"],how="left")
+    ewas_res.reset_index(drop=True,inplace=True)
+    ewas_res.fillna('-',inplace=True)
+    ewas_fields = ewas_res.columns.tolist()
+    ewas_values = ewas_res.values.tolist()
+    ewas_obj = {"results":ewas_values,"fields":ewas_fields}
+
     
-    try:
+    return {'subgraph':network_obj,'ewas':ewas_obj,'godmc':'error'}
         
-        ewasResponse = requests.get(EWAS_API_URL+cpg)
-        ewasData = ewasResponse.json()
         
-        try :
-            uniqueCpgList = networkDf['cpg'].unique().tolist()
-            godmcQueryJson = {"cpgs":uniqueCpgList,"cistrans": "trans","pval": 1e-10}
-            godmcResponse = requests.post(GODMC_API_URL,json=godmcQueryJson)
-            godmcData = godmcResponse.json()
-            
-            return {'subgraph':networkObj,'ewas':ewasData,'godmc':godmcData}
-        
-        except:
-            return {'subgraph':networkObj,'ewas':ewasData,'godmc':'error'}
-    
-    except:
-        
-        return {'subgraph':networkObj,'ewas':'error','godmc':'error'}
+
         
