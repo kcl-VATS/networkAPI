@@ -2,11 +2,6 @@ from fastapi import APIRouter
 from app.core.settings import DATA_PATH
 from pathlib import Path 
 import pandas as pd
-import requests 
-
-edge_color = '#f0f0f0'
-selected_cpg_color = '#f0027f'
-selected_edge_color = '#386cb0'
 
 network = APIRouter()
 
@@ -40,7 +35,7 @@ GODMC_API_URL = 'http://api.godmc.org.uk/v0.1/query'
 EWAS_API_URL = 'http://ewascatalog.org/api/?cpg='
 
 
-@network.get('/process')
+@network.get('/trans')
 # fix filters
 def get_data(file:str,minDistance:int,minAssoc:int,chromosomeList:str,minPval:int):
     
@@ -56,8 +51,7 @@ def get_data(file:str,minDistance:int,minAssoc:int,chromosomeList:str,minPval:in
     data = data.filter(lambda x: len(x) >= minAssoc) # filter by number of associations per cpg
 
     data = data[data['cpg_chr'].isin(chr_lst)]
-    data = data[data['pval']<=1*10**-minPval]
-
+    data = data.query(f"pval <= {1*10**-minPval}") 
     data['cpg_pos_abs'] = data['cpg_chr'].apply(lambda cpg_chr: chromosome_distance[str(cpg_chr)]) + data['cpg_pos'] # calculate absolute distance of cpg
     data['snp_pos_abs'] = data['snp_chr'].apply(lambda snp_chr: chromosome_distance[str(snp_chr)]) + data['snp_pos'] # calculate absolute distance of snp
     data['dist'] = abs(data['cpg_pos_abs'] - data['snp_pos_abs']) # calculate distance between pairs
@@ -74,8 +68,34 @@ def get_data(file:str,minDistance:int,minAssoc:int,chromosomeList:str,minPval:in
     data['id'] = data.index 
 
     response = data.to_dict('records')
- 
+  
     return response
+
+
+@network.get('/cis')
+# fix filters
+def get_data(file:str,minAssoc:int,targetChr:str,startPos:str,endPos:str,minPval:int):
+    
+    data = pd.read_csv(Path(DATA_PATH)/file,index_col=0) 
+    annot = pd.read_csv(Path(DATA_PATH)/'annot'/'cpg_annotation.csv',index_col=0)
+    data['cpg_chr'] = data['cpg_chr'].apply(str)
+    data['snp_chr'] = data['snp_chr'].apply(str)
+    data = data.query("cistrans == True")
+    data = data.query(f'snp_chr == "{targetChr}"')
+    data = data.query(f"snp_pos > {startPos} & snp_pos < {endPos}")
+    data = data.groupby('cpg') # group data by cpgs
+    data = data.filter(lambda x: len(x) >= minAssoc) # filter by number of associations per cpg
+    data = data.query(f"pval <= {1*10**-minPval}") 
+    data = data.reset_index(drop=True)
+    data = data.merge(annot,how='left',on='cpg')
+    data.drop(['MAPINFO','CHR'],axis=1,inplace=True) 
+    data['UCSC_RefGene_Name'] = data['UCSC_RefGene_Name'].fillna('-')
+    data['id'] = data.index 
+    response = data.to_dict('records')
+    return response
+
+
+
 
 @network.get('/ewas')
 def ewas(cpg:str,file:str,level:int):
