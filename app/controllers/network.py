@@ -56,19 +56,12 @@ def get_data(file:str,minDistance:int,minAssoc:int,chromosomeList:str,minPval:in
     data['snp_pos_abs'] = data['snp_chr'].apply(lambda snp_chr: chromosome_distance[str(snp_chr)]) + data['snp_pos'] # calculate absolute distance of snp
     data['dist'] = abs(data['cpg_pos_abs'] - data['snp_pos_abs']) # calculate distance between pairs
     data = data[data['dist']>=minDistance] # filter by min distance
-
     data = data.reset_index(drop=True)
-
     data = data.merge(annot,how='left',on='cpg')
-
     data.drop(['MAPINFO','CHR'],axis=1,inplace=True)
-    
     data['UCSC_RefGene_Name'] = data['UCSC_RefGene_Name'].fillna('-')
-    
     data['id'] = data.index 
-
     response = data.to_dict('records')
-  
     return response
 
 
@@ -93,8 +86,6 @@ def get_data(file:str,minAssoc:int,targetChr:str,startPos:str,endPos:str,minPval
     data['id'] = data.index 
     response = data.to_dict('records')
     return response
-
-
 
 
 @network.get('/ewas')
